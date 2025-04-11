@@ -35,6 +35,9 @@ photsys_dict = odict([
         ('acs_wfc' ,'tab_mag_odfnew/tab_mag_acs_wfc.dat'),
         ('lsst', 'tab_mag_odfnew/tab_mag_lsst.dat'),
         ('lsst_dp0', 'tab_mag_odfnew/tab_mag_lsstDP0.dat'),
+        ('lsst_r1p9', 'tab_mag_odfnew/tab_mag_lsstR1.9.dat'),
+        ('roman', 'tab_mag_odfnew/tab_mag_Roman2021.dat'),
+        ('euclid', 'tab_mag_odfnew/tab_mag_euclid_nisp.dat'),
 ])
 
 photname_dict = odict([
@@ -44,6 +47,9 @@ photname_dict = odict([
         ('acs_wfc','HST/ACS'),
         ('lsst', 'LSST'),
         ('lsst_dp0', 'LSST'),
+        ('lsst_r1p9', 'LSST'),
+        ('roman', 'Roman'),
+        ('euclid', 'Euclid'),
 ])
 
 # Commented options may need to be restored for older version/isochrones.
@@ -158,7 +164,7 @@ defaults_33 = {'cmd_version': 3.3,
                }
 
 defaults_36 = dict(defaults_33,cmd_version=3.6)
-
+defaults_38 = dict(defaults_33,cmd_version=3.8)
 class ParsecIsochrone(Isochrone):
     """ Base class for PARSEC-style isochrones. """
 
@@ -451,7 +457,7 @@ class Marigo2017(ParsecIsochrone):
         ('hb_spread',0.1,'Intrinisic spread added to horizontal branch'),
         )
 
-    download_defaults = copy.deepcopy(defaults_36)
+    download_defaults = copy.deepcopy(defaults_38)
     download_defaults['isoc_kind'] = 'parsec_CAF09_v1.2S_NOV13'
 
     columns = dict(
@@ -502,8 +508,34 @@ class Marigo2017(ParsecIsochrone):
                 (29,('z',float)),
                 (30,('Y',float)),
                 ]),
+        roman = odict([
+                (3, ('mass_init',float)),
+                (5, ('mass_act',float)),
+                (6, ('log_lum',float)),
+                (9,('stage',float))
+                (25, ('F062',float)),
+                (26,('F087',float)),
+                (27,('F106',float)),
+                (28,('F129',float)),
+                (29,('F158',float)),
+                (30,('F184',float)),
+                (31,('F146',float)),
+                (32,('F213',float)),
+                ]),
+        euclid = odict([
+                (3, ('mass_init',float)),
+                (5, ('mass_act',float)),
+                (6, ('log_lum',float)),
+                (9,('stage',float))
+                (25, ('VIS',float)),
+                (26,('Y',float)),
+                (28,('J',float)),
+                (30,('H',float)),
+                ]),
+        )
         )
     columns['lsst'] = copy.deepcopy(columns['lsst_dp0'])
+    columns['lsst_r1p9'] = copy.deepcopy(columns['lsst_dp0'])
 
     def _find_column_numbers(self):
         """ Map from the isochrone column names to the column numbers. """
