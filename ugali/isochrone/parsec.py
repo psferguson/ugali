@@ -512,7 +512,7 @@ class Marigo2017(ParsecIsochrone):
                 (3, ('mass_init',float)),
                 (5, ('mass_act',float)),
                 (6, ('log_lum',float)),
-                (9,('stage',float))
+                (9,('stage',float)),
                 (25, ('F062',float)),
                 (26,('F087',float)),
                 (27,('F106',float)),
@@ -526,13 +526,12 @@ class Marigo2017(ParsecIsochrone):
                 (3, ('mass_init',float)),
                 (5, ('mass_act',float)),
                 (6, ('log_lum',float)),
-                (9,('stage',float))
+                (9,('stage',float)),
                 (25, ('VIS',float)),
                 (26,('Y',float)),
                 (28,('J',float)),
                 (30,('H',float)),
                 ]),
-        )
         )
     columns['lsst'] = copy.deepcopy(columns['lsst_dp0'])
     columns['lsst_r1p9'] = copy.deepcopy(columns['lsst_dp0'])
