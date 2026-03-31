@@ -164,8 +164,9 @@ defaults_33 = {'cmd_version': 3.3,
                }
 
 defaults_36 = dict(defaults_33,cmd_version=3.6)
-defaults_38 = dict(defaults_33,cmd_version=3.8)
 defaults_39 = dict(defaults_33,cmd_version=3.9)
+
+
 class ParsecIsochrone(Isochrone):
     """ Base class for PARSEC-style isochrones. """
 
