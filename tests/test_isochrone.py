@@ -4,6 +4,7 @@ Test isochrone functionality. These tests require that ugali has been
 installed with the '--isochrones' option.
 """
 import os
+import glob
 import numpy as np
 
 from ugali import isochrone
@@ -28,9 +29,9 @@ survey_models = {
     'des'    : ['Bressan2012','Marigo2017','Dotter2008','Dotter2016'],
     'ps1'    : ['Bressan2012','Marigo2017','Dotter2008','Dotter2016'],
     'sdss'   : ['Bressan2012','Marigo2017','Dotter2008','Dotter2016'],
-    'lsst'   : ['Marigo2017'],
-    'roman'  : ['Marigo2017'],
-    'euclid' : ['Marigo2017'],
+    'lsst'   : ['Bressan2012','Marigo2017','Dotter2016'],
+    'roman'  : ['Bressan2012','Marigo2017','Dotter2016'],
+    'euclid' : ['Bressan2012','Marigo2017'],
 }
 
 # Bands to use for each photometric system
@@ -52,7 +53,7 @@ def has_library(survey, name):
     """
     path = os.path.join(isochrone.get_iso_dir(),survey,name.lower())
     if os.path.exists(path): return True
-    logger.warn("Library not installed: %s %s"%(survey,name))
+    logger.warning("Library not installed: %s %s"%(survey,name))
     return False
 
 def set_parameters(name):
@@ -214,6 +215,69 @@ def test_match_band():
     # an exact match wins over a prefixed one
     names = ['gmag','DES-gmag']
     assert P._match_band('g',names) == 0
+
+def test_mesa_column_numbers():
+    """ MIST columns are resolved from the file header.
+
+    The released libraries are MIST v1.0; v1.2 inserted a 'log_R' column that
+    shifts the luminosity, the magnitudes and the phase by one. Resolving from
+    the header has to reproduce the hard-coded v1.0 numbering exactly on the
+    old files, which is what this checks -- if it ever stops doing so, the
+    distributed libraries are being read with the wrong columns.
+    """
+    from ugali.isochrone.mesa import Dotter2016
+
+    for s in ['des','sdss','ps1']:
+        if not has_library(s,'Dotter2016'): continue
+        path = os.path.join(isochrone.get_iso_dir(),s,'dotter2016')
+        filename = sorted(glob.glob(os.path.join(path,'*.dat')))[0]
+
+        columns = Dotter2016._find_column_numbers(filename,s)
+        assert columns is not None
+        resolved = {(k[0] if isinstance(k,tuple) else k):v[0]
+                    for k,v in columns.items()}
+        for num,(name,_) in Dotter2016.columns[s].items():
+            assert resolved[num].lower() == name.lower()
+
+def test_mesa_band_column():
+    """ MIST band columns are matched on the full '<system>_<band>' name.
+
+    'log_g' and 'log_R' come before the magnitudes and would be picked up as
+    the LSST 'g' and 'r' bands by a looser match.
+    """
+    from ugali.isochrone.mesa import Dotter2016
+
+    names = ['EEP','isochrone_age_yr','initial_mass','star_mass','log_Teff',
+             'log_R','log_g','log_L','[Fe/H]_init','[Fe/H]',
+             'LSST_u','LSST_g','LSST_r','LSST_i','LSST_z','LSST_y','phase']
+    assert Dotter2016._band_column('g',names,'lsst') == 11
+    assert Dotter2016._band_column('r',names,'lsst') == 12
+    assert Dotter2016._band_column('Y',names,'lsst') == 15
+    assert Dotter2016._band_column('F062',names,'lsst') is None
+
+    # the prefix is not always the form's 'output' value
+    ps1 = ['EEP','isochrone_age_yr','initial_mass','star_mass','log_Teff',
+           'log_g','log_L','[Fe/H]_init','[Fe/H]','PS_g','PS_r','PS_w','phase']
+    assert Dotter2016._band_column('g',ps1,'ps1') == 9
+    assert Dotter2016._band_column('w',ps1,'ps1') == 11
+
+def test_mesa_metadata():
+    """ Every MIST photometric system is completely described. """
+    from ugali.isochrone.mesa import dict_output, band_prefix_dict, bands_dict
+
+    assert set(dict_output) == set(band_prefix_dict) == set(bands_dict)
+
+def test_ab_magnitudes():
+    """ Only PARSEC's Roman tables need a Vega->AB conversion.
+
+    MIST serves every system in AB, so applying the PARSEC offsets to a MIST
+    Roman isochrone would double-count them.
+    """
+    from ugali.isochrone.parsec import Marigo2017
+    from ugali.isochrone.mesa import Dotter2016
+
+    assert 'roman' in Marigo2017.vega_to_ab
+    assert Dotter2016.vega_to_ab == {}
 
 def test_import():
     """ Test various import strategies """

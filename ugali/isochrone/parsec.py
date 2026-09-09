@@ -17,7 +17,8 @@ except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, URLError
 
-import subprocess
+import shutil
+import contextlib
 import re
 
 import numpy as np
@@ -310,7 +311,7 @@ class ParsecIsochrone(Isochrone):
         q = urlencode(params).encode('utf-8')
         logger.debug("%s?%s"%(url,q))
         c = str(urlopen(url, q).read())
-        aa = re.compile('output\d+')
+        aa = re.compile(r'output\d+')
         fname = aa.findall(c)
         
         if len(fname) == 0:
@@ -318,11 +319,18 @@ class ParsecIsochrone(Isochrone):
             raise RuntimeError(msg)
 
         out = '{0}/tmp/{1}.dat'.format(server, fname[0])
-        
-        cmd = 'wget --progress dot:binary %s -O %s'%(out,outfile)
-        logger.debug(cmd)
-        stdout = subprocess.check_output(cmd,shell=True,stderr=subprocess.STDOUT)
-        logger.debug(str(stdout))
+
+        # NOTE: fetched with urlopen rather than by shelling out to wget, so
+        # that the download uses the same TLS configuration as the query
+        # above. The CMD server has been seen to serve an incomplete
+        # certificate chain, and the usual fix (pointing SSL_CERT_FILE at a
+        # bundle carrying the missing intermediate) reaches Python but not a
+        # wget subprocess, which would fail the download after a successful
+        # query. It also drops a shell dependency.
+        logger.debug("Downloading %s..."%out)
+        with contextlib.closing(urlopen(out)) as response:
+            with open(outfile,'wb') as tmp:
+                shutil.copyfileobj(response,tmp)
 
         return outfile
 
@@ -335,28 +343,19 @@ class ParsecIsochrone(Isochrone):
             ('stage'    , ['label']),
             ])
 
+    # Bands and Vega->AB offsets for the CMD photometric systems. These are
+    # module-level so that they can be extended without subclassing; the
+    # class attributes are what the shared read path in Isochrone uses.
+    band_names = bands_dict
+    vega_to_ab = vega_to_ab_dict
+    header_dtypes = odict([('stage',int)])
+
     @classmethod
-    def _find_column_numbers(cls, filename, survey):
-        """ Map from the isochrone column names to the column numbers.
+    def _header_columns(cls, filename):
+        """ Column names from the header of a CMD file.
 
-        The CMD output format has changed repeatedly (columns have been added
-        and reordered between cmd_2.7, cmd_3.3 and cmd_3.8), so the hard-coded
-        column numbers in `columns` are only correct for the format they were
-        written against. Reading them from the header instead means that files
-        downloaded from any modern version of the CMD interface are parsed
-        correctly, and that adding a photometric system only requires adding
-        its bands to `bands_dict`.
-
-        Parameters
-        ----------
-        filename : isochrone file to inspect
-        survey   : photometric system of the file
-
-        Returns
-        -------
-        columns : odict of column number -> (name, dtype), or None if the file
-                  does not name its columns (i.e. the legacy cmd_2.7 format),
-                  in which case the hard-coded `columns` must be used.
+        Returns None for the legacy cmd_2.7 format, which does not name its
+        columns and has to fall back to the hard-coded `columns`.
         """
         names = None
         with open(filename,'r') as f:
@@ -368,44 +367,13 @@ class ParsecIsochrone(Isochrone):
                 # names them 'mbol', 'g', ... and is not self-describing.
                 if any(t.endswith('mag') for t in tokens) and 'Mini' in tokens:
                     names = tokens
-        if names is None:
-            logger.debug("Column names not found in header: %s"%filename)
-            return None
+        return names
 
-        index = odict([(n,i) for i,n in enumerate(names)])
-        columns = odict()
-
-        for name, aliases in cls.header_names.items():
-            for alias in aliases:
-                if alias in index:
-                    dtype = int if name == 'stage' else float
-                    columns[index[alias]] = (name, dtype)
-                    break
-            else:
-                msg = "Column '%s' not found in header: %s"%(name,filename)
-                raise ValueError(msg)
-
-        bands = bands_dict.get(survey.lower())
-        if bands is None:
-            msg = "Unrecognized survey: %s"%survey
-            logger.warning(msg)
-            raise KeyError(survey)
-
-        suffix = band_suffix_dict.get(survey.lower(),'')
-        for band in bands:
-            idx = cls._match_band(band,names,suffix)
-            if idx is None:
-                msg = "Band '%s' not found in header: %s"%(band,filename)
-                logger.warning(msg)
-                continue
-            columns[idx] = (band, float)
-            # Single-character bands are also exposed in the opposite case so
-            # that, e.g., both 'y' and 'Y' work for the LSST y band.
-            if len(band) == 1:
-                alias = band.upper() if band.islower() else band.lower()
-                columns[(idx,alias)] = (alias, float)
-
-        return columns
+    @classmethod
+    def _band_column(cls, band, names, survey):
+        """ Column of a band, using this survey's filter-set suffix. """
+        return cls._match_band(band,names,
+                               band_suffix_dict.get(survey.lower(),''))
 
     @staticmethod
     def _match_band(band, names, suffix=''):
@@ -436,43 +404,6 @@ class ParsecIsochrone(Isochrone):
             if core and core.split('-')[-1] == band.lower(): return i
 
         return None
-
-    @staticmethod
-    def _genfromtxt_kwargs(columns):
-        """ Build the np.genfromtxt arguments for a column mapping.
-
-        Keys of `columns` are column numbers, except for the case-aliased
-        bands, whose keys are (column number, name) tuples so that the same
-        column can be read into two differently named fields.
-        """
-        usecols, dtype = [], []
-        for key, value in columns.items():
-            usecols.append(key[0] if isinstance(key,tuple) else key)
-            dtype.append(value)
-        return dict(usecols=usecols, dtype=dtype)
-
-    def _check_bands(self, filename):
-        """ Check that the requested bands were found in the file. """
-        names = self.data.dtype.names or ()
-        missing = [b for b in (self.band_1,self.band_2) if b not in names]
-        if missing:
-            msg = "Band(s) %s not found for survey '%s' in %s\n"%(
-                ', '.join(repr(b) for b in missing), self.survey, filename)
-            msg += "Available bands: %s"%(', '.join(
-                n for n in names if n not in self.header_names))
-            raise ValueError(msg)
-
-    def _convert_to_ab(self):
-        """ Convert Vega magnitudes to AB magnitudes in place.
-
-        The CMD interface serves some photometric systems (Roman, for example)
-        in Vega magnitudes. ugali is an AB magnitude code, so the offsets in
-        `vega_to_ab_dict` are applied as soon as the file is read.
-        """
-        offsets = vega_to_ab_dict.get(self.survey.lower(), {})
-        for band, offset in offsets.items():
-            if band in (self.data.dtype.names or ()):
-                self.data[band] += offset
 
     @classmethod
     def parse_header(cls, filename, nlines=15):
@@ -650,9 +581,7 @@ class Bressan2012(ParsecIsochrone):
             kwargs = dict(delimiter='\t',usecols=list(columns.keys()),
                           dtype=list(columns.values()))
 
-        self.data = np.genfromtxt(filename,**kwargs)
-        self._check_bands(filename)
-        self._convert_to_ab()
+        self._read_data(filename,**kwargs)
 
         self.mass_init = self.data['mass_init']
         self.mass_act  = self.data['mass_act']
@@ -784,9 +713,7 @@ class Marigo2017(ParsecIsochrone):
             kwargs = dict(usecols=list(columns.keys()),
                           dtype=list(columns.values()))
 
-        self.data = np.genfromtxt(filename,**kwargs)
-        self._check_bands(filename)
-        self._convert_to_ab()
+        self._read_data(filename,**kwargs)
         # cut out anomalous point:
         # https://github.com/DarkEnergySurvey/ugali/issues/29
         self.data = self.data[~np.isin(self.data['stage'], [9])]

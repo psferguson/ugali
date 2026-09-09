@@ -39,7 +39,8 @@ TINY_AGES = ['10.0', '12.0']
 TINY_ZS = ['0.00010', '0.00020']
 
 # Libraries that exist for each survey. DES, Pan-STARRS and SDSS carry all
-# four models; the LSST, Roman and Euclid libraries are Marigo+ 2017 only.
+# four models; Dartmouth (dotter2008) has no LSST, Roman or Euclid filter set
+# and MIST (dotter2016) has no Euclid, so those combinations are absent.
 # This doubles as the contents of the tiny bundle, so that a default install
 # is usable by downstream packages that work in those filter systems (e.g.
 # LSSTDESC/streamobs). Keep in sync with SURVEY_MODELS in setup.py.
@@ -47,9 +48,9 @@ LIBRARIES = odict([
     ('des'   , ['bressan2012', 'marigo2017', 'dotter2008', 'dotter2016']),
     ('ps1'   , ['bressan2012', 'marigo2017', 'dotter2008', 'dotter2016']),
     ('sdss'  , ['bressan2012', 'marigo2017', 'dotter2008', 'dotter2016']),
-    ('lsst'  , ['marigo2017']),
-    ('roman' , ['marigo2017']),
-    ('euclid', ['marigo2017']),
+    ('lsst'  , ['bressan2012', 'marigo2017', 'dotter2016']),
+    ('roman' , ['bressan2012', 'marigo2017', 'dotter2016']),
+    ('euclid', ['bressan2012', 'marigo2017']),
 ])
 
 

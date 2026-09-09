@@ -40,15 +40,45 @@ Topic :: Scientific/Engineering :: Astronomy
 Topic :: Scientific/Engineering :: Physics
 """
 
-RELEASE_URL = URL+'/releases/download/v1.8.0'
+# Repository and tag that the auxiliary libraries are downloaded from. Both
+# can be overridden from the environment, which is what makes it possible to
+# install libraries from a fork (or from a release candidate) without editing
+# this file:
+#   UGALI_RELEASE_REPO=https://github.com/psferguson/ugali
+#   UGALI_RELEASE_TAG=v1.9.0 python setup.py isochrones --survey lsst
+RELEASE_REPO = os.getenv("UGALI_RELEASE_REPO",'https://github.com/psferguson/ugali')
+RELEASE_TAG = os.getenv("UGALI_RELEASE_TAG",'v1.9.0')
+RELEASE_URL = RELEASE_REPO+'/releases/download/'+RELEASE_TAG
+# The catalogs, the test data and the DES/PS1/SDSS isochrone libraries have
+# not changed since v1.8.0 and are still served from the upstream release;
+# only the assets that this release publishes come from RELEASE_URL. Once a
+# release carries every asset, LEGACY_URL can be dropped.
+LEGACY_URL = os.getenv("UGALI_LEGACY_URL",URL+'/releases/download/v1.8.0')
 UGALIDIR = os.getenv("UGALIDIR","$HOME/.ugali")
-ISOSIZE = "~1MB" 
+ISOSIZE = "~2MB"
 CATSIZE = "~20MB"
 TSTSIZE = "~1MB"
 # Could find file size dynamically, but it's a bit slow...
 # int(urllib.urlopen(ISOCHRONES).info().getheaders("Content-Length")[0])/1024**2
-SURVEYS = ['des','ps1','sdss','lsst']
+SURVEYS = ['des','ps1','sdss','lsst','roman','euclid']
 MODELS = ['bressan2012','marigo2017','dotter2008','dotter2016']
+
+# Libraries that are published by this release rather than by v1.8.0
+NEW_LIBRARIES = ['lsst','roman','euclid']
+
+# Not every survey has a library for every model. Requesting all the
+# libraries for a survey should install what exists rather than fail on the
+# first combination that does not.
+SURVEY_MODELS = {
+    'des'    : MODELS,
+    'ps1'    : MODELS,
+    'sdss'   : MODELS,
+    # Dartmouth (dotter2008) has no LSST, Roman or Euclid filter set, and
+    # MIST (dotter2016) has no Euclid, so those combinations do not exist.
+    'lsst'   : ['bressan2012','marigo2017','dotter2016'],
+    'roman'  : ['bressan2012','marigo2017','dotter2016'],
+    'euclid' : ['bressan2012','marigo2017'],
+}
 
 class ProgressFileIO(io.FileIO):
     def __init__(self, path, *args, **kwargs):
@@ -79,7 +109,7 @@ class TarballCommand(distutils.cmd.Command,object):
          'force installation (overwrite any existing files)')
         ]
     boolean_options = ['force']
-    release_url = RELEASE_URL
+    release_url = LEGACY_URL
     _tarball = None
     _dirname = None
 
@@ -214,14 +244,31 @@ class IsochroneCommand(TarballCommand):
         if (self.survey is None) and (self.model is None):
             self.tarball = self._tarball
             self.dirname = self._dirname
+            # The tiny bundle now includes the LSST, Roman and Euclid stubs
+            self.release_url = RELEASE_URL
             super(IsochroneCommand,self).run()
             return
         
+        requested = []
         for survey in self.surveys:
             for model in self.models:
-                self.tarball = "ugali-%s-%s.tar.gz"%(survey,model)
-                self.dirname = "isochrones/%s/%s"%(survey,model)
-                super(IsochroneCommand,self).run()
+                if model not in SURVEY_MODELS.get(survey,MODELS):
+                    msg = "No %s library for survey '%s'; skipping..."
+                    # Only worth mentioning if the user asked for it by name
+                    if self.model is not None: print(msg%(model,survey))
+                    continue
+                requested.append((survey,model))
+
+        if not requested:
+            msg = "No isochrone libraries available for survey=%s, model=%s"
+            raise Exception(msg%(self.survey,self.model))
+
+        for survey,model in requested:
+            self.tarball = "ugali-%s-%s.tar.gz"%(survey,model)
+            self.dirname = "isochrones/%s/%s"%(survey,model)
+            self.release_url = RELEASE_URL if survey in NEW_LIBRARIES \
+                else LEGACY_URL
+            super(IsochroneCommand,self).run()
 
 
 class install(_install):
