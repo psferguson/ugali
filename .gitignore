@@ -13,3 +13,6 @@ ugali/data/*/
 healpix
 mask
 *.tar.gz
+
+### release assets
+release/
