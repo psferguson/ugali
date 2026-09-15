@@ -59,15 +59,15 @@ The following isochrone libraries are available. All cover ages of 1.0 - 13.5 Gy
 | `roman`  | Roman 2021 filters (*F062* - *F213*)           | `bressan2012`, `marigo2017`, `dotter2016`                 |
 | `euclid` | Euclid VIS+NISP (*VIS*, *Y*, *J*, *H*)         | `bressan2012`, `marigo2017`                               |
 
-A minimal subset of all of these libraries (two ages at two metallicities) is what gets installed by the `--isochrones` option. The gaps in the table are upstream ones rather than choices: the Dartmouth interface behind `dotter2008` offers no LSST, Roman or Euclid filter set, and MIST (`dotter2016`) has LSST and Roman but no Euclid. Anything that *is* offered upstream but not distributed here can still be generated locally with `ugali/scratch/download_isochrones.py`.
+A minimal subset of all of these libraries (two ages at two metallicities) is what gets installed by the `--isochrones` option. 
 
-Additional LSST filter systems can be downloaded with `ugali/scratch/download_isochrones.py`, but are not distributed: `lsst_dp0` (Oct 2017 throughputs, used for the DP0/DC2 simulations) and `lsst_2012` (the original March 2012 throughputs). `lsst_r1p9` is a deprecated alias for `lsst`. Note that Roman isochrones are served by the CMD interface in Vega magnitudes and are converted to AB magnitudes by `ugali` when they are read.
+Additional LSST filter systems can be downloaded with `ugali/scratch/download_isochrones.py`, but are not distributed: `lsst_dp0` (Oct 2017 throughputs, used for the DP0/DC2 simulations) and `lsst_2012` (the original March 2012 throughputs). 
 
 For example, to install the [Bressan et al. 2012](http://adsabs.harvard.edu/abs/2012MNRAS.427..127B) isochrones for the DES survey:
 
 ```
 cd $UGALIDIR
-wget https://github.com/DarkEnergySurvey/ugali/releases/download/v1.8.0/ugali-des-bressan2012.tar.gz
+wget https://github.com/DarkEnergySurvey/ugali/releases/download/v1.9.0/ugali-des-bressan2012.tar.gz
 tar -xzf ugali-des-bressan2012.tar.gz
 ```
 
@@ -96,13 +96,6 @@ python setup.py isochrones --survey lsst
 
 # To install the catalog libraries
 python setup.py catalogs
-```
-
-The libraries are downloaded from a GitHub release. Both the repository and the tag can be overridden from the environment, which is how you install libraries from a fork or from a release candidate:
-```
-export UGALI_RELEASE_REPO=https://github.com/psferguson/ugali
-export UGALI_RELEASE_TAG=v1.9.0
-python setup.py isochrones --survey lsst
 ```
 
 Usage Examples
